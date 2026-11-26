@@ -53,40 +53,59 @@ public final class SubscriptionClient {
         DECRYPT_FAILURE
     }
 
+    /** Subscriber details returned by the server after the android_id is verified. */
+    public static final class UserInfo {
+        public final String name;
+        public final String phone;
+        public final String date;      // subscription end, "yyyy/MM/dd"
+        public final String androidId;
+
+        public UserInfo(String name, String phone, String date, String androidId) {
+            this.name = name == null ? "" : name.trim();
+            this.phone = phone == null ? "" : phone.trim();
+            this.date = date == null ? "" : date.trim();
+            this.androidId = androidId == null ? "" : androidId.trim();
+        }
+    }
+
     public static final class Result {
         public final Status status;
         public final List<Channel> channels;
+        public final UserInfo user;
         public final String arabicMessage;
 
-        private Result(Status status, List<Channel> channels, String arabicMessage) {
+        private Result(Status status, List<Channel> channels, UserInfo user, String arabicMessage) {
             this.status = status;
             this.channels = channels;
+            this.user = user;
             this.arabicMessage = arabicMessage;
         }
 
-        public static Result ok(List<Channel> channels) {
-            return new Result(Status.OK, channels, null);
+        public static Result ok(List<Channel> channels, UserInfo user) {
+            return new Result(Status.OK, channels, user, null);
         }
 
         public static Result notSubscribed() {
-            return new Result(Status.NOT_SUBSCRIBED, null, "الاشتراك مطلوب");
+            return new Result(Status.NOT_SUBSCRIBED, null, null, "الاشتراك مطلوب");
         }
 
         public static Result notReady() {
-            return new Result(Status.NOT_READY, null, "الخدمة غير جاهزة حالياً، أعد المحاولة بعد قليل");
+            return new Result(Status.NOT_READY, null, null, "الخدمة غير جاهزة حالياً، أعد المحاولة بعد قليل");
         }
 
         public static Result error(Status status, String arabicMessage) {
-            return new Result(status, null, arabicMessage);
+            return new Result(status, null, null, arabicMessage);
         }
     }
 
     private SubscriptionClient() {}
 
     public static Result fetch(String userId) {
-        if (userId == null || userId.isEmpty()) {
+        if (userId == null || userId.trim().isEmpty()) {
             return Result.notSubscribed();
         }
+        // The server trims + lower-cases the android_id before deriving the key.
+        userId = userId.trim().toLowerCase(java.util.Locale.ROOT);
 
         List<String> bases = new ArrayList<>(Arrays.asList(Config.HF_BASES));
         Collections.shuffle(bases);
@@ -150,6 +169,7 @@ public final class SubscriptionClient {
     }
 
     static Result parseAndDecrypt(String rawJson, String userId) {
+        userId = userId == null ? "" : userId.trim().toLowerCase(java.util.Locale.ROOT);
         try {
             JsonElement rootEl = JsonParser.parseString(rawJson);
             if (!rootEl.isJsonObject()) {
@@ -181,27 +201,41 @@ public final class SubscriptionClient {
             }
 
             JsonElement innerEl = JsonParser.parseString(innerJson);
+            UserInfo userInfo = null;
+            JsonArray arr = null;
+
             if (innerEl.isJsonObject()) {
                 JsonObject obj = innerEl.getAsJsonObject();
+
+                // Server error envelope: {"ok":0,"e":"not_subscribed"}
                 if (obj.has("ok") && obj.get("ok").getAsInt() == 0 && obj.has("e")) {
                     String errCode = obj.get("e").getAsString();
                     if ("not_subscribed".equals(errCode)) {
-                        if (BuildConfig.DEBUG) {
-                            Log.d(TAG, "server: not_subscribed");
-                        }
                         return Result.notSubscribed();
                     }
                     if ("not_ready".equals(errCode)) {
-                        if (BuildConfig.DEBUG) {
-                            Log.d(TAG, "server: not_ready");
-                        }
                         return Result.notReady();
                     }
+                    return Result.error(Status.BAD_PAYLOAD, "استجابة غير متوقعة من الخادم");
                 }
-                return Result.error(Status.BAD_PAYLOAD, "استجابة غير متوقعة من الخادم");
+
+                // New success format: {"user":{...},"channels":[...]}
+                if (obj.has("channels") && obj.get("channels").isJsonArray()) {
+                    arr = obj.getAsJsonArray("channels");
+                }
+                if (obj.has("user") && obj.get("user").isJsonObject()) {
+                    JsonObject u = obj.getAsJsonObject("user");
+                    userInfo = new UserInfo(
+                            strOrEmpty(u, "name"),
+                            strOrEmpty(u, "phone"),
+                            strOrEmpty(u, "date"),
+                            strOrEmpty(u, "android_id"));
+                }
+            } else if (innerEl.isJsonArray()) {
+                arr = innerEl.getAsJsonArray(); // legacy server: bare channel array
             }
 
-            if (!innerEl.isJsonArray()) {
+            if (arr == null) {
                 return Result.error(Status.BAD_PAYLOAD, "تنسيق القنوات غير صالح");
             }
 
@@ -210,7 +244,6 @@ public final class SubscriptionClient {
                 return Result.error(Status.DECRYPT_FAILURE, "فشل تهيئة مفتاح التشفير");
             }
 
-            JsonArray arr = innerEl.getAsJsonArray();
             List<Channel> channels = new ArrayList<>();
             int encryptedCount = 0;
             int decryptFailCount = 0;
@@ -257,7 +290,7 @@ public final class SubscriptionClient {
                         "فشل فك تشفير القنوات، تحقق من معرف المستخدم");
             }
 
-            return Result.ok(channels);
+            return Result.ok(channels, userInfo);
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
                 Log.d(TAG, "Payload parse error: " + e.getClass().getSimpleName());

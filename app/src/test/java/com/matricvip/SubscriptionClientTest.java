@@ -76,4 +76,14 @@ public class SubscriptionClientTest {
                 StandardCharsets.UTF_8);
         assertEquals(SAMPLE_URL, decryptedUrl);
     }
+
+    @Test
+    public void newFormatCarriesUserAndChannels() throws Exception {
+        String json = "{\"user\":{\"date\":\"2027/05/01\",\"phone\":\"0629996310\","
+                + "\"name\":\"Ahmed\",\"android_id\":\"f7e517a67ad64575\"},"
+                + "\"channels\":[{\"img\":\"i\",\"name\":\"Ch1\",\"Url1\":\"\"}]}";
+        com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        assertEquals("Ahmed", o.getAsJsonObject("user").get("name").getAsString());
+        assertEquals(1, o.getAsJsonArray("channels").size());
+    }
 }

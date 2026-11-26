@@ -41,20 +41,17 @@ public class NotSubscribedActivity extends AppCompatActivity {
         root.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("هذا الحساب غير مشترك حالياً.\nيرجى تفعيل الاشتراك أو التحقق من معرف المستخدم.");
+        subtitle.setText("هذا الجهاز غير مشترك أو انتهى اشتراكه.\nأرسل معرف الجهاز أدناه للمسؤول لتفعيل الاشتراك.");
         subtitle.setTextSize(15);
         subtitle.setTextColor(Color.parseColor("#E0E0E0"));
         subtitle.setGravity(Gravity.CENTER);
         subtitle.setPadding(0, 0, 0, 28);
         root.addView(subtitle, matchWrap());
 
-        String masked = getIntent().getStringExtra(EXTRA_MASKED_ID);
-        if (masked == null || masked.isEmpty()) {
-            masked = UserIdHelper.mask(UserIdHelper.getUserId(this));
-        }
+        String masked = UserIdHelper.getUserId(this); // full id so the admin can add it
 
         idView = new TextView(this);
-        idView.setText("معرف المستخدم الحالي: " + masked);
+        idView.setText("معرف الجهاز: " + masked);
         idView.setTextSize(14);
         idView.setTextColor(Color.parseColor("#FFD54F"));
         idView.setGravity(Gravity.CENTER);
@@ -73,18 +70,12 @@ public class NotSubscribedActivity extends AppCompatActivity {
         retryLp.bottomMargin = 20;
         root.addView(retryBtn, retryLp);
 
-        Button changeIdBtn = new Button(this);
-        changeIdBtn.setText("تغيير معرف المستخدم");
-        changeIdBtn.setTextColor(Color.WHITE);
-        changeIdBtn.setBackgroundColor(Color.parseColor("#33393D"));
-        changeIdBtn.setOnClickListener(v ->
-                UserIdHelper.showChangeUserIdDialog(this, true, () -> {
-                    idView.setText("معرف المستخدم الحالي: "
-                            + UserIdHelper.mask(UserIdHelper.getUserId(this)));
-                    setResult(RESULT_OK);
-                    finish();
-                }));
-        root.addView(changeIdBtn, matchWrap());
+        Button copyIdBtn = new Button(this);
+        copyIdBtn.setText("نسخ معرف الجهاز");
+        copyIdBtn.setTextColor(Color.WHITE);
+        copyIdBtn.setBackgroundColor(Color.parseColor("#33393D"));
+        copyIdBtn.setOnClickListener(v -> UserIdHelper.copyId(this));
+        root.addView(copyIdBtn, matchWrap());
     }
 
     private LinearLayout.LayoutParams matchWrap() {

@@ -101,7 +101,7 @@ public class SettingFragmentActivity extends Fragment {
 		phone = _view.findViewById(R.id.phone);
 		textview8 = _view.findViewById(R.id.textview8);
 		USER_DATA = getContext().getSharedPreferences(Config.PREFS, Activity.MODE_PRIVATE);
-		linear_change_user_id.setOnClickListener(v -> UserIdHelper.showChangeUserIdDialog(requireContext(), true, this::refreshMaskedUserId));
+		linear_change_user_id.setOnClickListener(v -> UserIdHelper.copyId(requireContext()));
 	}
 	
 	private void initializeLogic() {
@@ -117,6 +117,9 @@ public class SettingFragmentActivity extends Fragment {
 	@Override
 	public void onResume() {
 		super.onResume();
+		username.setText(USER_DATA.getString("NAME", ""));
+		date.setText(USER_DATA.getString("DATE", ""));
+		phone.setText(USER_DATA.getString("PHONE", ""));
 		refreshMaskedUserId();
 		_countdown_start();
 	}
