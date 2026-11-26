@@ -17,6 +17,7 @@ public final class Config {
 
     public static final int CONNECT_TIMEOUT_S = 10;
     public static final int READ_TIMEOUT_S = 20;
+    /** Kept for reference only — auto-refresh is disabled; use manual refresh. */
     public static final int REFRESH_S = 60;
 
     /** "not_ready" retry policy (HF Spaces may be cold-starting). */

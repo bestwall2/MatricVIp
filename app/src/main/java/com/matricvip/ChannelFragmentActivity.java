@@ -5,8 +5,6 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -35,7 +33,6 @@ public class ChannelFragmentActivity extends Fragment {
 
     private final ArrayList<Channel> channelList = new ArrayList<>();
     private final AtomicBoolean inFlight = new AtomicBoolean(false);
-    private final Handler refreshHandler = new Handler(Looper.getMainLooper());
 
     private SwipeRefreshLayout swiperefreshlayout1;
     private RecyclerView recyclerview1;
@@ -43,16 +40,7 @@ public class ChannelFragmentActivity extends Fragment {
     private Recyclerview1Adapter adapter;
 
     private boolean subscriptionBlocked = false;
-
-    private final Runnable refreshRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (!subscriptionBlocked && isResumed()) {
-                fetchChannels();
-                refreshHandler.postDelayed(this, Config.REFRESH_S * 1000L);
-            }
-        }
-    };
+    private boolean loadedOnce = false;
 
     private final ActivityResultLauncher<Intent> notSubscribedLauncher =
             registerForActivityResult(
@@ -95,23 +83,22 @@ public class ChannelFragmentActivity extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (!subscriptionBlocked) {
+        // Load once when the screen is first opened. After that, no automatic
+        // requests: the user refreshes with the button or pull-to-refresh.
+        if (!loadedOnce && !subscriptionBlocked) {
+            loadedOnce = true;
             fetchChannels();
-            refreshHandler.removeCallbacks(refreshRunnable);
-            refreshHandler.postDelayed(refreshRunnable, Config.REFRESH_S * 1000L);
         }
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        refreshHandler.removeCallbacks(refreshRunnable);
     }
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        refreshHandler.removeCallbacks(refreshRunnable);
     }
 
     private void fetchChannels() {
@@ -153,7 +140,6 @@ public class ChannelFragmentActivity extends Fragment {
         if (result.status == SubscriptionClient.Status.NOT_SUBSCRIBED) {
             UserIdHelper.clearUserInfo(requireContext());
             subscriptionBlocked = true;
-            refreshHandler.removeCallbacks(refreshRunnable);
             channelList.clear();
             adapter.notifyDataSetChanged();
 

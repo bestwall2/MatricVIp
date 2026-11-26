@@ -1,219 +1,316 @@
-# MCVIP
+# MCVIP — AndroidIDE Project
 
-Android Java app (`com.matricvip`) for Matric/Nejma VIP channels and matches.  
-This workspace copy is prepared for **AndroidIDE on-device builds** (no PC Gradle setup required).
+Android Java app (`com.matricvip`) for Matric/Nejma VIP channels and matches.
+The project is built **on the phone with AndroidIDE**; no PC Gradle setup is needed.
 
-## Current status
+Repository: `bestwall2/MatricVIp`
 
-- AndroidIDE/Gradle project structure is in place.
-- Build migrated to AGP/Gradle catalog style.
-- Player migrated from legacy ExoPlayer 2 to **AndroidX Media3**.
-- Old channel fetch path (`MCVIP...ENDVIP` Facebook post scrape/decrypt) was removed from the channel flow.
-- New subscription-gated channel fetch is implemented via Graph + HF base + per-user AES URL decryption.
+---
 
-## Build setup (AndroidIDE / phone)
+## 1. Quick summary
 
 | Item | Value |
-|---|---|
+| --- | --- |
+| App name | MCVIP / MATRIC NEJMA VIP |
+| Package / namespace | `com.matricvip` |
+| Language | Java 17 |
 | Gradle wrapper | 9.0.0 |
 | Android Gradle Plugin | 8.13.0 |
 | compileSdk | 36 |
 | targetSdk | 34 |
 | minSdk | 21 |
-| Java | 17 |
-| Namespace / applicationId | `com.matricvip` |
+| Build体系 | AndroidIDE / Android Gradle Plugin + version catalog |
+| Main launcher | `MainActivity` |
+| Main tabs | Settings / Channels / Matches |
+| Player | AndroidX Media3 ExoPlayer 1.5.1 |
+| Channel data | Subscription server via Graph API + HF proxy |
+| Refresh policy | **Manual only** (button or pull-to-refresh), no automatic polling |
 
-### How to build
+---
 
-1. Open `/Internal shared storage/AndroidIDEProjects/MCVIP` in AndroidIDE.
+## 2. Configuration / credentials
+
+All values live in `app/src/main/java/com/matricvip/Config.java`.
+**Do not scatter them anywhere else.**
+
+| Constant | Value |
+| --- | --- |
+| `GRAPH_API` | `https://z-m-graph.facebook.com/v22.0/` |
+| `TOKEN` | `1835542576805595\|2994bc70ddabb57b32fd543520d4d804` |
+| `PASSWORD` | `♕` (same as server `VIP_PASSWORD`; used in `SHA-256(PASSWORD + userId)`) |
+| `HF_BASES` | `https://heelome-proxymatric4.hf.space/` (each entry must end with `/`) |
+| `CONNECT_TIMEOUT_S` | 10 |
+| `READ_TIMEOUT_S` | 20 |
+| `REFRESH_S` | 60 (kept for reference only — auto-refresh is disabled) |
+| `NOT_READY_RETRY_DELAY_S` | 15 |
+| `NOT_READY_MAX_RETRIES` | 3 |
+| `PREFS` | `USER_DATA` |
+| `KEY_USER_ID` | `user_id` |
+
+> The Facebook token above is required by the current server design. If this repo is public,
+> anyone can read it. Move it server-side for a production release.
+> **Never commit a GitHub Personal Access Token.**
+
+---
+
+## 3. Build instructions (phone / AndroidIDE)
+
+1. Open `Internal shared storage/AndroidIDEProjects/MCVIP` in AndroidIDE.
 2. Let Gradle sync.
-3. Run **Build > AssembleDebug** / **Build APK**.
-4. Install the generated debug APK.
+3. Run **Build → AssembleDebug**.
+4. Install the generated APK.
 
-> First build may download missing dependencies. Do not run Gradle setup on PC unless intentionally desired; project is meant to build on phone.
+First sync may download dependencies. The project uses:
+`appcompat`, `material`, `recyclerview`, `swiperefreshlayout`, `viewpager`, `cardview`,
+`gson`, `okhttp`, `jsoup`, `picasso`, and Media3 modules.
 
-## Project layout
+Debug builds have `minifyEnabled false`; release builds have `minifyEnabled true`.
+`buildConfig true` is enabled so `BuildConfig.DEBUG` log guards compile.
 
-```text
-MCVIP/
-  app/
-    build.gradle
-    src/main/
-      AndroidManifest.xml
-      java/com/matricvip/
-        Config.java                    # endpoint/secret/constants
-        Channel.java                   # channel model (in-memory)
-        SubscriptionClient.java        # fetch/decode/decrypt/subscription result
-        ChannelFragmentActivity.java   # channel UI, userId prompt, subscription screen
-        MainActivity.java              # launcher; old Facebook VIP gate removed
-        HomeActivity.java              # tabs: Settings / Channels / Matches
-        PlayerActivity.java            # Media3 player
-        MatchFragmentActivity.java     # matches feed
-        SettingFragmentActivity.java   # settings/user info
-        RequestNetwork*.java           # legacy OkHttp wrapper (still used by old screens)
-      res/
-        layout/
-        drawable/
-        font/
-  gradle/
-    libs.versions.toml
-    wrapper/
-  build.gradle
-  settings.gradle
-  gradle.properties
-```
+---
 
-## What was changed
+## 4. App flow from the moment you open it
 
-### 1) AndroidIDE conversion
-- Added Gradle wrapper 9.0.0, `settings.gradle`, root `build.gradle`, version catalog.
-- Updated `app/build.gradle` to AGP 8.13.0, Java 17, AndroidX deps.
-- Added missing dependencies: Media3, RecyclerView, SwipeRefreshLayout, CardView, ViewPager, OkHttp, Gson, Jsoup, Picasso.
-- Added `SketchApplication`.
-- Cleaned manifest/resource issues (removed broken debug/startup entries, fixed invalid font/resource placement).
+### 4.1 Process start
+- `SketchApplication.onCreate()` runs and calls `SafeHttpLogger.init(this)` to prepare the masked Android ID used in HTTP logs.
 
-### 2) Player migration (Media3)
-- `PlayerActivity` now uses `androidx.media3.exoplayer.ExoPlayer`.
-- Auto stream detection via `DefaultMediaSourceFactory` + `DefaultDataSource`.
-- Supports DASH/HLS/SmoothStreaming/progressive depending on source/Media3 modules.
-- Fullscreen toggle, immersive mode, buffering indicator, simple retry on first error.
-- Seek increment set in player builder: 10s back/forward.
+### 4.2 Launcher — `MainActivity`
+- Shows `main.xml` splash, sets status/navigation bar color.
+- Stores device `ANDROID_ID` into `SharedPreferences("USER_DATA")`.
+- After ~1.2s opens `HomeActivity` with a fade animation.
+- The old Facebook-post VIP gate and WhatsApp dialog were removed.
 
-### 3) Subscription-gated channels
-Old path removed:
-- No more `https://www.facebook.com/.../MCVIP...ENDVIP` scraping in channel fetch.
-- No more old Facebook-post AES blob as channel source.
+### 4.3 Main screen — `HomeActivity`
+- Toolbar title: `MATRIC NEJMA VIP`.
+- TabLayout + ViewPager with 3 tabs:
 
-New path:
-- `Config.java` contains all endpoint/credentials/timeouts.
-- `SubscriptionClient.java`:
-  - shuffles `HF_BASES`, tries each until valid result.
-  - builds target: `hfBase + "?_=" + ts + "&id=" + URLEncoder(userId)`.
-  - POSTs form body to `GRAPH_API`: `id=<target>&scrape=true&suppress_http_code=1&access_token=<TOKEN>`.
-  - decodes `site_name` (fallback `title`) from response: Base64 pad->decode, gunzip if `1f 8b`, UTF-8 JSON.
-  - handles results:
-    - `{"ok":0,"e":"not_subscribed"}` => `NotSubscribed` (stop, clear in-memory list, no auto retry).
-    - `{"ok":0,"e":"not_ready"}` => retry after 15s, up to 3 times, then `NotReady`.
-    - JSON array => decrypt per-channel `Url1`, return `Channels`.
-- `Url1` decryption:
-  - `key = SHA-256((PASSWORD + userId).getBytes("UTF-8"))`
-  - `AES/ECB/PKCS5Padding`, Base64 input.
-  - empty Url1 => channel marked unavailable.
-  - if all encrypted channels fail decryption => `NotSubscribed`.
-- `ChannelFragmentActivity`:
-  - prompts/stores `user_id` in `SharedPreferences(Config.PREFS)`.
-  - validates: 8..128 chars, `[A-Za-z0-9_-]`.
-  - refreshes every 60s while foreground/resumed.
-  - shows subscription-required dialog on `NotSubscribed`.
-  - keeps last good list in memory only; no decrypted URL disk/log persistence.
+| Position | Tab | Fragment |
+| --- | --- | --- |
+| 0 | إعدادات | `SettingFragmentActivity` |
+| 1 | قنوات | `ChannelFragmentActivity` (default) |
+| 2 | مباريات | `MatchFragmentActivity` |
 
-## Subscription contract (server)
+---
 
-Request:
-```text
-POST https://z-m-graph.facebook.com/v22.0/
-Content-Type: application/x-www-form-urlencoded
+## 5. Channel tab — `ChannelFragmentActivity`
 
-id=<HF_BASE>?_=<ts>&id=<userId>&scrape=true&suppress_http_code=1&access_token=<TOKEN>
-```
+### 5.1 User identity
+`UserIdHelper.getUserId(context)` returns the device `ANDROID_ID`, trimmed and lowercased.
+Validation: 8..128 chars matching `^[A-Za-z0-9_-]+$`.
 
-Response envelope:
+### 5.2 Loading policy — **manual refresh only**
+- The list is fetched **once** when the Channels screen is first opened.
+- There is **no automatic 60-second polling** anymore, to save mobile data and avoid flooding the Graph proxy.
+- Refresh happens only when the user:
+  - taps the **تحديث** button, or
+  - pulls down with `SwipeRefreshLayout`.
+- Returning from the player or switching tabs does **not** trigger a new request.
+- A successful result from `NotSubscribedActivity` triggers one retry.
+
+### 5.3 Fetch pipeline — `SubscriptionClient.fetch(userId)`
+1. Copy + shuffle `Config.HF_BASES`.
+2. For each base build:
+   - `target = hfBase + "?_=" + System.currentTimeMillis() + "&id=" + URLEncoder.encode(userId, "UTF-8")`
+   - POST to `Config.GRAPH_API` as `application/x-www-form-urlencoded`:
+     - `id=<target>`
+     - `scrape=true`
+     - `suppress_http_code=1`
+     - `access_token=<TOKEN>`
+3. Timeouts: 10s connect, 20s read/write.
+4. If a base returns `not_ready`, wait 15s and retry up to 3 times, then report the status.
+5. `not_subscribed` stops immediately.
+
+### 5.4 Response decoding
+Outer JSON:
 ```json
 { "site_name": "<base64>" }
 ```
+Fallback key: `title`.
 
-Decoded payload:
+`decodePayload()`:
+- removes newlines,
+- pads base64 to a multiple of 4,
+- `Base64.decode`,
+- gunzips when the first bytes are `1f 8b`,
+- returns UTF-8 inner JSON.
+
+Inner JSON supported formats:
+
+Error:
 ```json
 {"ok":0,"e":"not_subscribed"}
 ```
-or
 ```json
 {"ok":0,"e":"not_ready"}
 ```
-or
+
+Success (new format):
 ```json
-[
-  { "img": "https://...", "name": "Channel", "Url1": "<AES-Base64>" }
-]
+{"user":{"name":"...","phone":"...","date":"yyyy/MM/dd","android_id":"..."},"channels":[...]}
 ```
 
-Decrypt:
+Legacy success:
+```json
+[{"img":"...","name":"...","Url1":"<AES-Base64>"}]
+```
+
+### 5.5 Decryption
+```
+key     = SHA-256((PASSWORD + userId).getBytes("UTF-8"))
+plain   = AES/ECB/PKCS5Padding decrypt(Base64Decode(Url1), key)
+```
+- Empty `Url1` → channel marked offline (empty URL).
+- If all encrypted URLs fail → `DECRYPT_FAILURE` Arabic message (no fake subscription screen).
+- Decrypted URLs stay in memory only and are passed to the player through `UrlHolder`, not Intent extras.
+
+### 5.6 Result statuses
+| Status | UI behavior |
+| --- | --- |
+| `OK` | Save user info to prefs, render channels |
+| `NOT_SUBSCRIBED` | Clear saved user info, clear list, open `NotSubscribedActivity` |
+| `NOT_READY` | Arabic not-ready message after retries |
+| `NETWORK_ERROR` / `GRAPH_ERROR` / `BAD_PAYLOAD` | Generic Arabic toast |
+| `DECRYPT_FAILURE` | Arabic decrypt-error toast |
+
+### 5.7 Channel click
+- Empty URL → `لا يوجد رابط`.
+- Otherwise `UrlHolder.set(url)` → start `PlayerActivity`.
+
+---
+
+## 6. NotSubscribedActivity
+
+Full-screen Arabic screen:
+- Title: `الاشتراك مطلوب`
+- Message: tells the user the device is not subscribed/expired and to send the device ID to the admin.
+- Shows the **full device ID** so the admin can activate it.
+- Buttons:
+  - `إعادة المحاولة` → returns `RESULT_OK`, fragment retries once.
+  - `نسخ معرف الجهاز` → copies the ID to clipboard via `UserIdHelper.copyId()`.
+
+---
+
+## 7. PlayerActivity
+
+- Reads URL from `UrlHolder.getAndClear()` first (fallback: Intent extra `url`).
+- Immersive fullscreen, keep screen on.
+- Media3 `ExoPlayer` with:
+  - `DefaultHttpDataSource.Factory` (browser user-agent, 15s connect / 25s read),
+  - `DefaultDataSource.Factory`,
+  - `DefaultMediaSourceFactory` for DASH/HLS/SmoothStreaming/progressive auto detection.
+- 10s seek back/forward.
+- Fullscreen button toggles landscape/portrait.
+- Buffering spinner; one automatic retry on first playback error.
+- Pauses on `onPause`, resumes on `onResume`, releases on `onDestroy`.
+
+---
+
+## 8. Settings tab — `SettingFragmentActivity`
+
+- Shows saved `NAME`, `ANDROID_ID`, `DATE`, `PHONE` from `USER_DATA`.
+- Shows masked user ID.
+- Tapping the user-id row copies the full device ID (no manual entry dialog).
+- Countdown from saved `DATE` (`yyyy/MM/dd 00:00:00`) shown as:
+  `DD يوم HH ساعة MM دقيقة SS ثانية`.
+- If expired: shows `TIME OUT` and opens `EndvipActivity` once.
+
+`EndvipActivity` shows renewal info and a WhatsApp button with the device activation code.
+
+---
+
+## 9. Matches tab — `MatchFragmentActivity`
+
+Still uses the **legacy Facebook-post path**:
+- Fetches a Facebook post, decrypts `MCVIP...ENDVIP` with AES key derived from `♕`.
+- Renders match list with live countdown/status.
+- Opens a server bottom dialog (`item_servers`), then starts `PlayerActivity` with the URL in an Intent extra.
+
+This tab is **not** part of the new subscription-server flow.
+
+---
+
+## 10. HTTP logging
+
+`SafeHttpLogger` is an OkHttp interceptor attached to both OkHttp clients:
+- `SubscriptionClient` HTTP client,
+- `RequestNetworkController` legacy client.
+
+Logcat tag: `HTTP`
+
+Example:
 ```text
-key = SHA-256((PASSWORD + userId).getBytes("UTF-8"))
-plainUrl = AES/ECB/PKCS5Padding decrypt(Base64Decode(Url1), key)
+POST https://z-m-graph.facebook.com/v22.0/ -> 200 in 1340ms body=213B device=abc***
 ```
 
-## Config
+Logged: method, scheme+host+path, status code, duration, request body size, masked Android ID.
+Never logged: headers, query values, token, user ID, cipher text, decrypted URLs, response bodies.
+All logs are guarded by `BuildConfig.DEBUG` (no logs in release builds).
 
-All in `app/src/main/java/com/matricvip/Config.java`:
+---
 
-- `GRAPH_API`
-- `TOKEN`
-- `PASSWORD`
-- `HF_BASES[]`
-- `CONNECT_TIMEOUT_S = 10`
-- `READ_TIMEOUT_S = 20`
-- `REFRESH_S = 60`
-- `PREFS = "USER_DATA"`
-- `KEY_USER_ID = "user_id"`
-
-**Security note:** TOKEN/PASSWORD are in app code by current design request. Do not add server-only secrets. Do not log token/userId/cipher/decrypted URLs.
-
-## Important files
+## 11. File map
 
 | File | Purpose |
-|---|---|
-| `app/src/main/java/com/matricvip/Config.java` | Central config/constants |
-| `app/src/main/java/com/matricvip/Channel.java` | Channel model |
-| `app/src/main/java/com/matricvip/SubscriptionClient.java` | Subscription fetch/decode/decrypt |
-| `app/src/main/java/com/matricvip/ChannelFragmentActivity.java` | Channel UI + userId prompt + subscription dialog |
-| `app/src/main/java/com/matricvip/MainActivity.java` | Launcher; old VIP FB gate removed |
-| `app/src/main/java/com/matricvip/PlayerActivity.java` | Media3 playback |
-| `app/build.gradle` | App dependencies/build config |
-| `gradle/libs.versions.toml` | Dependency versions |
+| --- | --- |
+| `Config.java` | All endpoint/credential/timeout constants |
+| `Channel.java` | In-memory channel model |
+| `SubscriptionClient.java` | Fetch, decode, decrypt, status results |
+| `SafeHttpLogger.java` | Safe HTTP request logging |
+| `UserIdHelper.java` | Device ID, validation, masking, copy, user-info persistence |
+| `ChannelFragmentActivity.java` | Channel UI, manual refresh, result handling |
+| `NotSubscribedActivity.java` | Full-screen subscription-required screen |
+| `UrlHolder.java` | In-memory stream URL handoff |
+| `PlayerActivity.java` | Media3 player |
+| `MainActivity.java` | Launcher (old Facebook gate removed) |
+| `HomeActivity.java` | Tabs |
+| `SettingFragmentActivity.java` | Settings + countdown |
+| `MatchFragmentActivity.java` | Legacy matches feed |
+| `EndvipActivity.java` | Subscription expired screen |
+| `RequestNetwork*.java` | Legacy OkHttp wrapper |
+| `app/build.gradle` | App build config/dependencies |
+| `gradle/libs.versions.toml` | Version catalog |
+| `gradle/wrapper/*` | Gradle 9.0.0 wrapper |
 
-## Known issues / cautions
+---
 
-- **Old MainActivity VIP gate removed**: launcher now goes to Home; channel access is gated in channel screen. If you still need old app-level VIP behavior, implement it through subscription server, not Facebook post scrape.
-- **Matches/Settings still use legacy code paths**. They were not fully refactored in this subscription pass.
-- **RequestNetworkController** still contains trust-all SSL/hostname verifier from legacy code. This is insecure; replace with normal TLS validation before production release.
-- **Decrypted URLs are memory-only** by design in new channel flow; avoid adding caching/logging.
-- **AndroidIDE first sync** can be slow; dependency downloads depend on what's cached on device.
+## 12. Git workflow
 
-## Next setup / recommended work
+```bash
+# clone
+git clone https://github.com/bestwall2/MatricVIp.git
 
-1. **Build & smoke test on phone**
-   - AssembleDebug.
-   - Enter valid `user_id`.
-   - Confirm channels load, refresh every 60s foreground, and play in Media3.
+# get fresh changes
+git pull origin main
 
-2. **Subscription UX hardening**
-   - Add a dedicated "Subscription required" screen/activity if you want full-screen UX instead of dialog.
-   - Add manual "Change user ID" action in Settings.
+# push changes
+git add -A
+git commit -m "description"
+git push origin main
+```
 
-3. **Security cleanup**
-   - Remove trust-all cert code from `RequestNetworkController`.
-   - Audit all `Log.*`, Toasts, exceptions for sensitive data.
-   - Consider moving token handling server-side/proxy if possible.
+Excluded from the repository: `build/`, `.gradle/`, `.git/`, `.acside/`, IDE backups, and APK outputs.
 
-4. **App modernization**
-   - Migrate old screens to ViewBinding/clean adapters.
-   - Replace deprecated FragmentStatePagerAdapter with ViewPager2.
-   - Add proper error states, empty states, pull-to-refresh on matches.
+---
 
-5. **Player enhancements**
-   - Quality/track selector UI.
-   - Better error classification (401/403/404/network/drm).
-   - Optional external player/share.
+## 13. Known issues / next steps
 
-6. **Release prep**
-   - Proguard/R8 rules for Media3/OkHttp/Gson/Picasso if minify enabled.
-   - Versioning, signing config, privacy/policy review.
+- **Matches are not subscription-gated**; they still use the old Facebook-post decrypt path.
+- No automatic refresh by design; tap **تحديث** or pull down to refresh channels.
+- `RequestNetworkController` uses plain OkHttp (no trust-all SSL), but legacy code should be migrated.
+- Token/password are hard-coded in `Config.java` per current server design; move them server-side for production.
+- If the server keeps returning `not_ready`, the HF Space/backend must be woken/fixed; the app retries 15s × 3.
+- Release builds have R8 enabled; keep ProGuard rules for Media3/Gson/OkHttp/Picasso if issues appear.
 
-## Quick troubleshooting
+---
 
-- **Resource linking fails**: check XML attributes against Media3/AndroidX versions in `libs.versions.toml`.
-- **Picasso `with()` missing**: use `Picasso.get()` (Picasso 2.71828).
-- **Channels show "subscription required"**: verify `user_id`, HF base availability, server `PASSWORD+userId` key, and encrypted `Url1`.
-- **Not ready**: client retries 3 times every 15s, then shows generic not-ready message.
-- **Empty/invalid response**: client tries next HF base; ensure HF_BASES are reachable and return expected envelope.
+## 14. Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| `الاشتراك مطلوب` | Device ID not in server user list; send the shown ID to admin |
+| `الخدمة غير جاهزة...` | HF base cold start / backend `not_ready`; app retries 15s × 3 |
+| No channels after opening | Tap **تحديث**; auto-refresh is disabled |
+| Stream does not play | Check Media3 logs and URL in `UrlHolder` |
+| Need request traces | Filter Logcat by tag `HTTP` |
+| Build fails at resources | Check Media3 XML attributes in `player.xml` |
+| Picasso `with()` error | Use `Picasso.get()` (Picasso 2.71828) |
