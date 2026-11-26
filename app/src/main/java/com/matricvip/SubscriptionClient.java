@@ -41,6 +41,7 @@ public final class SubscriptionClient {
             .connectTimeout(Config.CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
             .readTimeout(Config.READ_TIMEOUT_S, TimeUnit.SECONDS)
             .writeTimeout(Config.READ_TIMEOUT_S, TimeUnit.SECONDS)
+            .addInterceptor(new SafeHttpLogger())
             .build();
 
     public enum Status {

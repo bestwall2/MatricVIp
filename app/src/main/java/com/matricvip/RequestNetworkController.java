@@ -46,6 +46,7 @@ public class RequestNetworkController {
 					.connectTimeout(SOCKET_TIMEOUT, TimeUnit.MILLISECONDS)
 					.readTimeout(READ_TIMEOUT, TimeUnit.MILLISECONDS)
 					.writeTimeout(READ_TIMEOUT, TimeUnit.MILLISECONDS)
+					.addInterceptor(new SafeHttpLogger())
 					.build();
 		}
 		return client;
