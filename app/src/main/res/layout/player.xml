@@ -1,0 +1,29 @@
+<FrameLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:id="@+id/linear1"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:background="#000000"
+	android:keepScreenOn="true">
+
+	<androidx.media3.ui.PlayerView
+		android:id="@+id/player_view"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:layout_gravity="center"
+		app:hide_on_touch="true"
+		app:resize_mode="fit"
+		app:show_buffering="never"
+		app:show_timeout="5000"
+		app:use_controller="true" />
+
+	<ProgressBar
+		android:id="@+id/progressbar1"
+		style="?android:progressBarStyle"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_gravity="center"
+		android:indeterminate="true" />
+
+</FrameLayout>
