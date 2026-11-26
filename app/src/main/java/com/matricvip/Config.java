@@ -19,6 +19,10 @@ public final class Config {
     public static final int READ_TIMEOUT_S = 20;
     public static final int REFRESH_S = 60;
 
+    /** "not_ready" retry policy (HF Spaces may be cold-starting). */
+    public static final int NOT_READY_RETRY_DELAY_S = 15;
+    public static final int NOT_READY_MAX_RETRIES = 3;
+
     public static final String PREFS = "USER_DATA";
     public static final String KEY_USER_ID = "user_id";
 }

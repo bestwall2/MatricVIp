@@ -107,22 +107,46 @@ public final class SubscriptionClient {
         // The server trims + lower-cases the android_id before deriving the key.
         userId = userId.trim().toLowerCase(java.util.Locale.ROOT);
 
-        List<String> bases = new ArrayList<>(Arrays.asList(Config.HF_BASES));
-        Collections.shuffle(bases);
+        Result notReady = null;
 
-        Result lastError = Result.error(Status.NETWORK_ERROR, "تعذر الاتصال بالشبكة، تحقق من الإنترنت");
+        for (int retry = 0; retry <= Config.NOT_READY_MAX_RETRIES; retry++) {
+            List<String> bases = new ArrayList<>(Arrays.asList(Config.HF_BASES));
+            Collections.shuffle(bases);
 
-        for (String hfBase : bases) {
-            Result res = fetchFromBase(hfBase, userId);
-            if (res.status == Status.OK
-                    || res.status == Status.NOT_SUBSCRIBED
-                    || res.status == Status.NOT_READY) {
-                return res;
+            Result lastError = Result.error(
+                    Status.NETWORK_ERROR, "تعذر الاتصال بالشبكة، تحقق من الإنترنت");
+            boolean sawNotReady = false;
+
+            for (String hfBase : bases) {
+                Result res = fetchFromBase(hfBase, userId);
+                if (res.status == Status.OK || res.status == Status.NOT_SUBSCRIBED) {
+                    return res;
+                }
+                if (res.status == Status.NOT_READY) {
+                    sawNotReady = true;
+                    continue;
+                }
+                lastError = res;
             }
-            lastError = res;
+
+            if (!sawNotReady) {
+                return lastError;
+            }
+
+            notReady = Result.notReady();
+            if (retry == Config.NOT_READY_MAX_RETRIES) {
+                break;
+            }
+
+            try {
+                Thread.sleep(Config.NOT_READY_RETRY_DELAY_S * 1000L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
 
-        return lastError;
+        return notReady;
     }
 
     private static Result fetchFromBase(String hfBase, String userId) {
