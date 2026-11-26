@@ -52,9 +52,38 @@ public final class UserIdHelper {
         return userId.substring(0, 3) + "***";
     }
 
+    /** The subscriber id is the device's ANDROID_ID (matches "android_id" in users.json). */
     public static String getUserId(Context context) {
+        String id = android.provider.Settings.Secure.getString(
+                context.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+        return id == null ? "" : id.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Stores the verified subscriber details so Settings can show them. */
+    public static void saveUserInfo(Context context, SubscriptionClient.UserInfo u) {
+        if (u == null) return;
         SharedPreferences prefs = context.getSharedPreferences(Config.PREFS, Context.MODE_PRIVATE);
-        return prefs.getString(Config.KEY_USER_ID, "").trim();
+        prefs.edit()
+                .putString("NAME", u.name)
+                .putString("PHONE", u.phone)
+                .putString("DATE", u.date)
+                .putString("ANDROID_ID", u.androidId.isEmpty() ? getUserId(context) : u.androidId)
+                .apply();
+    }
+
+    /** Wipes stored subscriber details (not subscribed / expired). */
+    public static void clearUserInfo(Context context) {
+        context.getSharedPreferences(Config.PREFS, Context.MODE_PRIVATE).edit()
+                .remove("NAME").remove("PHONE").remove("DATE").apply();
+    }
+
+    public static void copyId(Context context) {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                context.getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm != null) {
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("id", getUserId(context)));
+            Toast.makeText(context, "تم نسخ المعرف", Toast.LENGTH_SHORT).show();
+        }
     }
 
     public static void saveUserId(Context context, String userId) {

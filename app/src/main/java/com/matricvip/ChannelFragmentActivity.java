@@ -119,7 +119,8 @@ public class ChannelFragmentActivity extends Fragment {
         String userId = UserIdHelper.getUserId(requireContext());
         if (!UserIdHelper.isValid(userId)) {
             swiperefreshlayout1.setRefreshing(false);
-            UserIdHelper.showChangeUserIdDialog(requireContext(), false, this::fetchChannels);
+            SketchwareUtil.showMessage(requireContext().getApplicationContext(),
+                    "تعذر قراءة معرف الجهاز");
             return;
         }
 
@@ -150,6 +151,7 @@ public class ChannelFragmentActivity extends Fragment {
 
     private void handleResult(SubscriptionClient.Result result, String userId) {
         if (result.status == SubscriptionClient.Status.NOT_SUBSCRIBED) {
+            UserIdHelper.clearUserInfo(requireContext());
             subscriptionBlocked = true;
             refreshHandler.removeCallbacks(refreshRunnable);
             channelList.clear();
@@ -163,6 +165,7 @@ public class ChannelFragmentActivity extends Fragment {
 
         if (result.status == SubscriptionClient.Status.OK && result.channels != null) {
             subscriptionBlocked = false;
+            UserIdHelper.saveUserInfo(requireContext(), result.user);
             channelList.clear();
             channelList.addAll(result.channels);
             recyclerview1.setVisibility(View.VISIBLE);
@@ -175,7 +178,6 @@ public class ChannelFragmentActivity extends Fragment {
                     ? result.arabicMessage
                     : "فشل فك تشفير القنوات، تحقق من معرف المستخدم";
             SketchwareUtil.showMessage(requireContext().getApplicationContext(), decryptMsg);
-            UserIdHelper.showChangeUserIdDialog(requireContext(), true, this::fetchChannels);
             return;
         }
 
